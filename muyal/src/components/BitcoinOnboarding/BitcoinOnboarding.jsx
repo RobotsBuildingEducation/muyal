@@ -22,7 +22,7 @@ import { translation } from "../../utility/translation";
 
 import { useNostrWalletStore } from "../../hooks/useNostrWalletStore";
 import { database } from "../../database/firebaseResources";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { IdentityCard } from "../../elements/IdentityCard";
 
 const BitcoinOnboarding = ({ userLanguage }) => {
@@ -57,15 +57,34 @@ const BitcoinOnboarding = ({ userLanguage }) => {
     init: state.init,
   }));
 
-  useEffect(() => {
-    let asyncStart = async () => {
-      await init();
-    };
-    asyncStart();
-  }, []);
+  // useEffect(() => {
+  //   const loadUserIdentity = async () => {
+  //     try {
+  //       const userDocRef = doc(
+  //         database,
+  //         "users",
+  //         localStorage.getItem("local_npub")
+  //       );
+  //       const docSnap = await getDoc(userDocRef);
+  //       if (docSnap.exists()) {
+  //         const data = docSnap.data();
+  //         if (data.identity) {
+  //           setSelectedIdentity(data.identity);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.error("Error loading user identity:", error);
+  //     }
+  //   };
+  //   loadUserIdentity();
+  // }, []);
   // Helper: sum up wallet balance
+
+  console.log("wallet balance..x...", walletBalance);
   const totalBalance =
     (walletBalance || [])?.reduce((sum, b) => sum + (b.amount || 0), 0) || null;
+
+  console.log("TOTAL BALANCE", totalBalance);
 
   useEffect(() => {
     // If we have a deposit in progress and the user pays it, after proofs update
@@ -100,15 +119,14 @@ const BitcoinOnboarding = ({ userLanguage }) => {
   };
 
   const handleCreateWallet = async () => {
-    setInitializingWallet(true);
     try {
-      // Create a new wallet
-      // await createNewWallet();
-      if (cashuWallet) {
-        // After wallet is created, show deposit instructions
-        console.log("created wallet", cashuWallet);
-        // await handleInitiateDeposit();
-      }
+      const userDocRef = doc(
+        database,
+        "users",
+        localStorage.getItem("local_npub")
+      ); // Replace "users" with your Firestore collection
+      await updateDoc(userDocRef, { createdWallet: true });
+      createNewWallet();
     } catch (err) {
       console.error("Error creating wallet:", err);
       toast({
@@ -165,7 +183,6 @@ const BitcoinOnboarding = ({ userLanguage }) => {
    */
 
   useEffect(() => {
-    console.log("cashu wallet from modal", cashuWallet);
     if (cashuWallet) {
       setInitializingWallet(true);
     }
@@ -173,8 +190,6 @@ const BitcoinOnboarding = ({ userLanguage }) => {
 
   const renderButtonText = (buttonText) => {
     const parts = buttonText.split(/(Cash App)/); // Split by "Cash App"
-
-    console.log("prts", parts);
 
     return (
       <Text as="span">
@@ -220,7 +235,6 @@ const BitcoinOnboarding = ({ userLanguage }) => {
     // );
   };
 
-  console.log("running cashu", cashuWallet);
   const renderContent = () => {
     if (!cashuWallet) {
       // Step 1: No wallet yet
@@ -243,6 +257,14 @@ const BitcoinOnboarding = ({ userLanguage }) => {
                   "modal.bitcoinMode.instructions.createWallet.2"
                 ]
               }
+              &nbsp;
+              <b>
+                {
+                  translation[userLanguage][
+                    "modal.bitcoinMode.instructions.createWallet.2.5"
+                  ]
+                }
+              </b>
             </Text>
           </Text>
 
@@ -289,19 +311,19 @@ const BitcoinOnboarding = ({ userLanguage }) => {
             >
               <VStack align="start">
                 <Radio
-                  colorScheme="green"
+                  colorScheme="pink"
                   value="npub14vskcp90k6gwp6sxjs2jwwqpcmahg6wz3h5vzq0yn6crrsq0utts52axlt"
                 >
                   robotsbuildingeducation.com
                 </Radio>
                 <Radio
-                  colorScheme="green"
+                  colorScheme="pink"
                   value="npub166md04uzz4ksy4zv2c8maz4lprrezmtfkwq6yfevtqel3tchkthsemwtwm"
                 >
                   ladderly.io
                 </Radio>
                 <Radio
-                  colorScheme="green"
+                  colorScheme="pink"
                   value="npub1ae02dvwewx8w0z2sftpcg2ta4xyu6hc00mxuq03x2aclta6et76q90esq2"
                 >
                   girlsoncampus.org
@@ -353,21 +375,16 @@ const BitcoinOnboarding = ({ userLanguage }) => {
               isLoading={initializingWallet}
               loadingText={translation[userLanguage]["loading.wallet"]}
               isDisabled={!selectedIdentity.length > 0}
+              boxShadow="0.5px 0.5px 1px 0px rgba(0,0,0,0.75)"
             >
               {translation[userLanguage]["createWallet.button"]}
-              {/* {
-                translation[userLanguage][
-                  "modal.bitcoinMode.createWalletButton"
-                ]
-              } */}
             </Button>
           </VStack>
         </>
       );
     }
 
-    console.log("wallet balance", walletBalance);
-    console.log("Total balance...", totalBalance);
+    console.log("cashuWalletcashuWalletcashuWallet", cashuWallet);
     // We have a wallet now
     if (totalBalance > 0) {
       // Step 4: Balance > 0, show Identity Card
@@ -417,9 +434,7 @@ const BitcoinOnboarding = ({ userLanguage }) => {
           </Text>
           <VStack fontSize="sm">
             <IdentityCard
-              number={
-                cashuWallet.walletId || "Robots Building Education Wallet"
-              }
+              number={cashuWallet.walletId}
               name={
                 <div>
                   {translation[userLanguage]["modal.bitcoinMode.cardNameLabel"]}
@@ -433,7 +448,7 @@ const BitcoinOnboarding = ({ userLanguage }) => {
                   </div>
                 </div>
               }
-              theme="BTC"
+              theme={totalBalance > 0 ? "nostr" : "BTC"}
               animateOnChange={false}
               realValue={cashuWallet.walletId}
             />
@@ -460,6 +475,7 @@ const BitcoinOnboarding = ({ userLanguage }) => {
               <div style={{ marginTop: "8px" }}>
                 {translation[userLanguage]["or"]} &nbsp;
                 <Button
+                  boxShadow="0.5px 0.5px 1px 0px rgba(0,0,0,0.75)"
                   onMouseDown={() => handleCopyInvoice()}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -503,9 +519,7 @@ const BitcoinOnboarding = ({ userLanguage }) => {
               </b>
             </Text>
             <IdentityCard
-              number={
-                cashuWallet.walletId || "Robots Building Education Wallet"
-              }
+              number={cashuWallet.walletId}
               name={
                 <div>
                   {translation[userLanguage]["modal.bitcoinMode.cardNameLabel"]}
@@ -519,9 +533,10 @@ const BitcoinOnboarding = ({ userLanguage }) => {
                   </div>
                 </div>
               }
-              theme="BTC"
+              theme={totalBalance > 0 ? "nostr" : "BTC"}
               animateOnChange={false}
               realValue={cashuWallet.walletId}
+              totalBalance={totalBalance || 0}
             />
             <br />
             <br />
@@ -534,6 +549,7 @@ const BitcoinOnboarding = ({ userLanguage }) => {
                     handleInitiateDeposit();
                   }
                 }}
+                boxShadow="0.5px 0.5px 1px 0px rgba(0,0,0,0.75)"
                 isLoading={depositing}
                 loadingText={
                   translation[userLanguage]["loading.wallet.address"]
@@ -546,6 +562,51 @@ const BitcoinOnboarding = ({ userLanguage }) => {
                 } */}
                 {translation[userLanguage]["deposit.button"]}
               </Button>
+
+              <Box marginTop="2" width="100%">
+                <Accordion allowToggle reduceMotion={true} mb={4}>
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box
+                        flex="1"
+                        textAlign="left"
+                        fontSize="sm"
+                        textAlign="center"
+                      >
+                        {translation[userLanguage]["change.recipient"]}
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <RadioGroup
+                        onChange={handleIdentityChange}
+                        value={selectedIdentity}
+                      >
+                        <VStack align="start">
+                          <Radio
+                            colorScheme="pink"
+                            value="npub14vskcp90k6gwp6sxjs2jwwqpcmahg6wz3h5vzq0yn6crrsq0utts52axlt"
+                          >
+                            robotsbuildingeducation.com
+                          </Radio>
+                          <Radio
+                            colorScheme="pink"
+                            value="npub166md04uzz4ksy4zv2c8maz4lprrezmtfkwq6yfevtqel3tchkthsemwtwm"
+                          >
+                            ladderly.io
+                          </Radio>
+                          <Radio
+                            colorScheme="pink"
+                            value="npub1ae02dvwewx8w0z2sftpcg2ta4xyu6hc00mxuq03x2aclta6et76q90esq2"
+                          >
+                            girlsoncampus.org
+                          </Radio>
+                        </VStack>
+                      </RadioGroup>
+                    </AccordionPanel>
+                  </AccordionItem>
+                </Accordion>
+              </Box>
             </VStack>
           </Box>
         );

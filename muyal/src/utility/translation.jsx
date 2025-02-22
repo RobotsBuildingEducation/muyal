@@ -2,6 +2,8 @@ import { DataTags } from "../elements/DataTag";
 
 export let translation = {
   en: {
+    "change.recipient": "Change your scholarship recipient",
+
     "modal.externalLinkTitle": "Leaving The App",
     "modal.externalLinkBody":
       "You are about to be redirected to the free version of ChatGPT where no login is required. Paste the question data that we've copied to generate help. Create an account with ChatGPT to acces the custom chat version of this app instead.",
@@ -1277,6 +1279,8 @@ reverse(head) {
     copy_code_launch_builder: "Copy, build and ship with v0",
   },
   es: {
+    "change.recipient": "Cambiar tu beneficiario de la beca",
+
     copied: "¡Copiado!",
     copy_code_launch_builder: "Copiar código y lanzar el creador de IA",
     "buildYourApp.input.label": "Tu idea",

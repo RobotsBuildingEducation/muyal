@@ -30,7 +30,7 @@ if (window.location.hostname === "localhost") {
 }
 
 export const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider("6LfecssqAAAAAMhxyk_eyPWYg_i9yeM1AHLH3WeM"),
+  provider: new ReCaptchaV3Provider("6LeJWM4qAAAAAAVAEp98wuaJJ-YQ4tgwko9upXPZ"),
   isTokenAutoRefreshEnabled: true,
 });
 const database = getFirestore(app);

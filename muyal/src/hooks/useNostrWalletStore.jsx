@@ -5,6 +5,8 @@ import { Buffer } from "buffer";
 import { bech32 } from "bech32";
 
 import NDKWalletService, { NDKCashuWallet } from "@nostr-dev-kit/ndk-wallet";
+import { database } from "../database/firebaseResources";
+import { doc, updateDoc } from "firebase/firestore";
 
 const defaultMint = "https://mint.minibits.cash/Bitcoin";
 const defaultRelays = ["wss://relay.damus.io", "wss://relay.primal.net"];
@@ -70,23 +72,20 @@ export const useNostrWalletStore = create((set, get) => ({
       nostrPubKey,
       nostrPrivKey,
       connectToNostr,
+      setupWalletListeners,
     } = get();
 
     try {
       let ndk = providedNdk || ndkInstance;
       let s = providedSigner || signer;
 
-      // If we don't have ndk or signer, let's try to establish them
-      // This covers the scenario where the user is already logged in
-      // and the app loads up but we have not explicitly connected yet.
+      // If we don't have ndk or signer, try to establish them.
       if (!ndk || !s) {
-        // Check if we have keys
         if (nostrPubKey && nostrPrivKey) {
           const connection = await connectToNostr(nostrPubKey, nostrPrivKey);
           if (connection) {
             ndk = connection.ndkInstance;
             s = connection.signer;
-            // Store them for future use
             set({ ndkInstance: ndk, signer: s });
           } else {
             throw new Error(
@@ -98,22 +97,32 @@ export const useNostrWalletStore = create((set, get) => ({
         }
       }
 
-      // At this point, we must have ndk and signer
+      // Ensure ndk has a signer
       ndk.signer = s;
       const user = await s.user();
-      console.log("USER????????!!!", user.profile);
       user.signer = s;
 
       const wService = new NDKWalletService(ndk);
+
+      // Start the wallet service
+      wService.start();
+
+      // Listen for the 'wallet:default' event which signals a valid wallet was detected.
       wService.on("wallet:default", (w) => {
-        get().setupWalletListeners(w);
-      });
-      wService.on("wallet", (w) => {
-        // Could handle multiple wallets here if needed
-        console.log("on wallet", w);
+        // Clear the timer since a valid wallet was found.
+
+        // Optionally, update the user's wallet ID in your Firebase database.
+        // const userRef = doc(
+        //   database,
+        //   "users",
+        //   localStorage.getItem("local_npub")
+        // );
+        // updateDoc(userRef, { walletID: wService.defaultWallet.walletId });
+
+        // Set up additional wallet listeners.
+        setupWalletListeners(w);
       });
 
-      wService.start();
       set({ walletService: wService });
     } catch (error) {
       console.error("Error initializing wallet service:", error);
@@ -124,12 +133,14 @@ export const useNostrWalletStore = create((set, get) => ({
   setupWalletListeners: async (wallet) => {
     if (!wallet || !(wallet instanceof NDKCashuWallet)) return;
 
-    wallet.on("balance_updated", async () => {
+    wallet.on("balance_updated", async (balance) => {
       const bal = (await wallet.balance()) || [];
+
       set({ walletBalance: bal });
     });
 
     const initialBal = (await wallet.balance()) || [];
+
     set({
       walletBalance: initialBal,
       cashuWallet: wallet,
@@ -150,16 +161,13 @@ export const useNostrWalletStore = create((set, get) => ({
       if (connection) {
         const { ndkInstance: ndk, signer: s } = connection;
         set({ ndkInstance: ndk, signer: s });
-        await initWalletService(ndk, s);
+
+        // await initWalletService(ndk, s);
       }
     }
   },
 
-  createNewWallet: async (
-    mintUrls = [],
-    relayUrls = defaultRelays,
-    walletName = "Robots Building Education Wallet"
-  ) => {
+  createNewWallet: async (rerun = false) => {
     const {
       ndkInstance,
       signer,
@@ -167,23 +175,40 @@ export const useNostrWalletStore = create((set, get) => ({
       initWalletService,
       setupWalletListeners,
       connectToNostr,
+      init,
+      createNewWallet,
     } = get();
+
+    // in the onboarding view
     if (!ndkInstance || !signer) {
       setError("NDK or signer not initialized. Cannot create wallet yet.");
+      await init();
+      await initWalletService();
+      createNewWallet();
       return null;
+    } else {
+      // await init();
+      // await initWalletService();
+      // if (rerun) {
+      // } else {
+      //   createNewWallet(true);
+      // }
     }
 
     try {
       const newWallet = new NDKCashuWallet(ndkInstance);
-      newWallet.name = "Robots Building Education Wallet";
-      newWallet.relays = relayUrls;
+      // newWallet.name = "Robots Building Education Wallet";
+      newWallet.relays = defaultRelays;
       newWallet.setPublicTag("relay", "wss://relay.damus.io");
       newWallet.setPublicTag("relay", "wss://relay.primal.net");
-
-      newWallet.mints = mintUrls.length > 0 ? mintUrls : [defaultMint];
       newWallet.walletId = "Robots Building Education Wallet";
+
+      newWallet.mints = [defaultMint];
+      // newWallet.walletId = "Robots Building Education Wallet";
+
       newWallet.unit = "sat";
       newWallet.setPublicTag("unit", "sat");
+      newWallet.setPublicTag("d", "Robots Building Education Wallet");
 
       const pk = signer.privateKey;
       if (pk) {
@@ -191,18 +216,15 @@ export const useNostrWalletStore = create((set, get) => ({
       }
 
       await newWallet.publish();
-      console.log("Published wallet event:", newWallet.event.rawEvent());
 
-      const connection = await connectToNostr(
-        localStorage.getItem("local_npub"),
-        localStorage.getItem("local_nsec")
-      );
-      if (!connection) return null;
+      // newWallet.stop();
+      // newWallet.start();
 
-      const { ndkInstance: ndk, signer: s } = connection;
-      set({ ndkInstance: ndk, signer: s });
-      console.log("Initializing wallet service.");
-      await initWalletService(ndk, s);
+      // newWallet.checkProofs();
+      // ndk.wallet = newWallet;
+
+      await init();
+      await initWalletService();
       await setupWalletListeners(newWallet);
 
       return newWallet;
@@ -244,7 +266,6 @@ export const useNostrWalletStore = create((set, get) => ({
       const profileEvent = await user.fetchProfile();
 
       if (profileEvent) {
-        console.log("Fetched profile:", profileEvent);
         return profileEvent; // Contains profile fields like name, about, picture, etc.
       } else {
         console.warn("No profile metadata found for this user.");
@@ -361,8 +382,6 @@ export const useNostrWalletStore = create((set, get) => ({
       await cashuWallet.checkProofs();
       const updatedBalance = await cashuWallet.balance();
       set({ walletBalance: updatedBalance || [] });
-
-      console.log(`Successfully sent nutzap (1 sat) to ${recipientNpub}!`);
     } catch (e) {
       console.error("Error sending nutzap:", e);
       setError(e.message);
@@ -370,19 +389,21 @@ export const useNostrWalletStore = create((set, get) => ({
   },
 
   initiateDeposit: async (amountInSats = 10) => {
-    const { cashuWallet, setError, setInvoice } = get();
+    const { cashuWallet, setError, setInvoice, init, initWalletService } =
+      get();
     if (!cashuWallet) {
       console.error("Wallet not initialized.");
       return;
     }
 
+    // await init();
+    // await initWalletService();
     const deposit = cashuWallet.deposit(amountInSats, defaultMint, "sat");
     const pr = await deposit.start(); // pr is the LN invoice (bolt11)
     setInvoice(pr); // Store the invoice in Zustand
 
     deposit.on("success", async (token) => {
-      console.log("Deposit successful!", token);
-      await cashuWallet.checkProofs();
+      await cashuWallet.checkProofs(); // probably not needed
       const updatedBalance = await cashuWallet.balance();
       set({ walletBalance: updatedBalance || [] });
       setInvoice(""); // Clear invoice after success if desired
@@ -395,4 +416,18 @@ export const useNostrWalletStore = create((set, get) => ({
 
     return pr;
   },
+
+  resetState: () =>
+    set({
+      isConnected: false,
+      errorMessage: null,
+      nostrPubKey: "",
+      nostrPrivKey: "",
+      ndkInstance: null,
+      signer: null,
+      walletService: null,
+      cashuWallet: null,
+      walletBalance: 0,
+      invoice: "",
+    }),
 }));
