@@ -1,20 +1,23 @@
+// We'll go over these, but we have multiple videos covering some of this stuff deeper.
 import { create } from "zustand";
 import NDK, { NDKPrivateKeySigner, NDKEvent } from "@nostr-dev-kit/ndk";
-
 import { Buffer } from "buffer";
 import { bech32 } from "bech32";
-
 import NDKWalletService, { NDKCashuWallet } from "@nostr-dev-kit/ndk-wallet";
-import { database } from "../database/firebaseResources";
-import { doc, updateDoc } from "firebase/firestore";
 
+//Think of mints as issuers of tokens, or the address of "banks"
 const defaultMint = "https://mint.minibits.cash/Bitcoin";
+
+//Think of relays are servers or transmitters data, not owners of data (which is how the modern internet unfortunately works)
 const defaultRelays = ["wss://relay.damus.io", "wss://relay.primal.net"];
 
+// using a store by the zustand library. Basically makes state global.
 export const useNostrWalletStore = create((set, get) => ({
-  // State
-  isConnected: false,
-  errorMessage: null,
+  //State that handles the store's data in and out of this function.
+  //Not all of is used, but it should be, meaning a few corners are still cut.
+
+  isConnected: false, // not used, more effecient code
+  errorMessage: null, // not used, better user experience
   nostrPubKey: "",
   nostrPrivKey: "",
   ndkInstance: null,
@@ -22,7 +25,7 @@ export const useNostrWalletStore = create((set, get) => ({
   walletService: null,
   cashuWallet: null,
   walletBalance: 0,
-  invoice: "",
+  invoice: "", //🚨 not fully used, need ability to regenerate address/QR code data in case it expires.
 
   // Utility methods
   setError: (msg) => set({ errorMessage: msg }),

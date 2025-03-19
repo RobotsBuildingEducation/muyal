@@ -191,7 +191,12 @@ export const useSharedNostr = (initialNpub, initialNsec) => {
 
       // Decode the npub from Bech32
       const { words: npubWords } = bech32.decode(npub);
+
+      console.log("npubwords", npubWords);
+
       const hexNpub = Buffer.from(bech32.fromWords(npubWords)).toString("hex");
+
+      console.log("hexNpub", hexNpub);
 
       // Create a new NDK instance
       const ndkInstance = new NDK({
